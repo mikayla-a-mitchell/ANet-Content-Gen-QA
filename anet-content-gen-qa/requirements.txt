@@ -1,0 +1,22 @@
+# anet-exit-ticket-studio
+#
+# Mirrors the dependency pattern used by the team's existing internal tools
+# (ETGenerator / ItemReviewer): anthropic + streamlit + python-dotenv as the
+# core, one extra library layered on top for a specific feature.
+#
+# Unlike ItemReviewer, this app does not need `openai` or `pymupdf`. In
+# create mode items are already structured XML from our own generation
+# pipeline, so Phase 2 review reads that directly. In evaluate mode we do
+# read a PDF of items authored elsewhere — but the PDF is sent to the API as
+# a document content block and read there, so no local PDF library is needed
+# either. See pipeline/evaluate.py.
+
+anthropic>=0.28.0
+python-dotenv>=1.0.0
+streamlit>=1.35.0
+
+# Optional: enables "Download as PNG" for generated visuals (SVG works with
+# no extra dependency and is always available — see png_export.py). This
+# package installs fine everywhere; it only fails to *import* on a machine
+# without the system Cairo library, which png_export.py handles gracefully.
+cairosvg>=2.7.0
