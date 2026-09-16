@@ -72,8 +72,25 @@ SEV_WORD = {"high": "Must fix", "medium": "Should fix", "low": "Style"}
 
 
 # ── startup ───────────────────────────────────────────────────────────────────
+def api_key() -> str:
+    """The Anthropic key, from wherever this instance keeps it.
+
+    Locally that is `.env`, loaded into the environment above. When the app is
+    deployed there is deliberately no `.env` — the repo excludes it — and the
+    host supplies the key as a secret instead, which Streamlit exposes through
+    st.secrets rather than the environment. Accessing st.secrets raises when no
+    secrets are configured at all, so the lookup is guarded."""
+    key = (os.getenv("ANTHROPIC_API_KEY") or "").strip()
+    if key:
+        return key
+    try:
+        return str(st.secrets["ANTHROPIC_API_KEY"]).strip()
+    except Exception:
+        return ""
+
+
 def has_api_key() -> bool:
-    return bool(os.getenv("ANTHROPIC_API_KEY"))
+    return bool(api_key())
 
 
 def _run_startup_checks() -> None:
@@ -93,8 +110,12 @@ def _run_startup_checks() -> None:
     # viewer all work offline. Only generation and the model review need it.
     if not has_api_key():
         st.sidebar.warning(
-            "No `ANTHROPIC_API_KEY` in `.env`. You can edit, validate and view "
-            "lessons; generating and running the model review are disabled."
+            "**No Anthropic API key found.** You can edit, validate and view lessons; "
+            "generating, the model review and PDF extraction are disabled.\n\n"
+            "Running locally: put `ANTHROPIC_API_KEY=...` in `.env` and restart.\n\n"
+            "Deployed: add it under the app's **Settings → Secrets** as "
+            "`ANTHROPIC_API_KEY = \"sk-ant-api03-...\"` — the key is intentionally "
+            "not in the repo."
         )
 
 
@@ -460,8 +481,8 @@ def render_new_evaluation() -> None:
         st.info("Both the items PDF and the Teacher Edition export are needed to start.")
         return
     if not has_api_key():
-        st.error("Evaluating needs `ANTHROPIC_API_KEY` in `.env` — extraction and the "
-                 "review passes are model calls.")
+        st.error("Evaluating needs an Anthropic API key — extraction and the review "
+                 "passes are model calls. See the note in the sidebar.")
         return
 
     pdf_bytes = pdf_file.getvalue()
@@ -512,7 +533,7 @@ def render_new_evaluation() -> None:
     (fp["output_dir"] / "source_items.pdf").write_bytes(pdf_bytes)
 
     from anthropic import Anthropic
-    client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
+    client = Anthropic(api_key=api_key())
 
     # The lesson profile is what the rubric review measures the items against,
     # so evaluation still runs Phase 1 — just not 2a-2d, which would author.
@@ -744,7 +765,7 @@ def render_generate_panel(fp: dict, slug: str) -> None:
         return
 
     if not has_api_key():
-        st.error("Generating needs `ANTHROPIC_API_KEY` in `.env`. Add it and restart the app.")
+        st.error("Generating needs an Anthropic API key — see the note in the sidebar.")
         return
 
     err = st.session_state[fail_key]
@@ -765,7 +786,7 @@ def render_generate_panel(fp: dict, slug: str) -> None:
 
         with st.spinner(f"{label_for}…"):
             from anthropic import Anthropic
-            client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
+            client = Anthropic(api_key=api_key())
             error = run_one_phase(fp, client, gen.load_prompts(PROMPTS_DIR), pending)
         st.session_state[fail_key] = error
         st.rerun()          # immediately picks up the next pending phase
@@ -866,7 +887,7 @@ def render_suggestions_view(fp: dict, slug: str) -> None:
 
 def render_model_review_controls(fp: dict, slug: str, lesson: dict, questions: list) -> None:
     if not has_api_key():
-        st.error("The model review needs `ANTHROPIC_API_KEY` in `.env`.")
+        st.error("The model review needs an Anthropic API key — see the note in the sidebar.")
         return
 
     done = fp["review_report"].exists()
@@ -889,7 +910,7 @@ def render_model_review_controls(fp: dict, slug: str, lesson: dict, questions: l
     label = "Run model review" if not done else "Re-run model review"
     if st.button(label, type="primary" if not done else "secondary"):
         from anthropic import Anthropic
-        client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
+        client = Anthropic(api_key=api_key())
         prompts = review_mod.load_review_prompts(PROMPTS_DIR)
         profile = (fp["lesson_profile"].read_text(encoding="utf-8")
                    if fp["lesson_profile"].exists() else "")
